@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "Game": {
+      "title": "Game",
+      "description": "Bộ câu hỏi trò chơi mầm non",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "theme": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "playCount": { "type": "number" },
+        "questions": { "type": "array" },
+        "settings": { "type": "object" }
+      },
+      "required": ["id", "title", "questions", "settings"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Phiên chơi thời gian thực do máy cô quản lý",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "roomCode": { "type": "string" },
+        "gameId": { "type": "string" },
+        "status": { "type": "string", "enum": ["lobby", "playing", "ended"] },
+        "currentQuestionIndex": { "type": "number" },
+        "questionStatus": { "type": "string", "enum": ["waiting", "active", "results", "leaderboard"] },
+        "questionStartTime": { "type": "number" },
+        "questionTimeLimit": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "startedAt": { "type": "number" },
+        "endedAt": { "type": "number" }
+      },
+      "required": ["sessionId", "roomCode", "status", "currentQuestionIndex", "questionStatus"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Đội chơi mầm non tham gia phòng",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "joinedAt": { "type": "number" },
+        "online": { "type": "boolean" },
+        "score": { "type": "number" }
+      },
+      "required": ["teamId", "teamName", "deviceId", "score"]
+    },
+    "Answer": {
+      "title": "Answer",
+      "description": "Câu trả lời của đội gửi lên",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "questionIndex": { "type": "number" },
+        "questionId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "answerId": { "type": "string" },
+        "answerText": { "type": "string" },
+        "submittedAt": { "type": "number" },
+        "responseTimeMs": { "type": "number" },
+        "isCorrect": { "type": "boolean" },
+        "pointsAwarded": { "type": "number" }
+      },
+      "required": ["sessionId", "questionIndex", "teamId", "answerId", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

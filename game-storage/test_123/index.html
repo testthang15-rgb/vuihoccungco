@@ -1,0 +1,13 @@
+<h1>Hello Test</h1>
+<script id="__vui_hoc_bridge__">
+window.finishVuiHocGame = function(isCorrect, points, summary) {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: 'GAME_COMPLETE',
+      isCorrect: isCorrect !== false,
+      score: typeof points === 'number' ? points : 30,
+      summary: summary || 'Bé đã hoàn thành trò chơi!'
+    }, '*');
+  }
+};
+</script>

@@ -1,0 +1,172 @@
+[
+  {
+    "id": "smoke_test_game_1792665048726",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792665048726,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792665048801
+  },
+  {
+    "id": "smoke_test_game_1792573851574",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792573851574,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792573851604
+  },
+  {
+    "id": "smoke_test_game_1792571569842",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792571569842,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792571569900
+  },
+  {
+    "id": "smoke_test_game_1792570069108",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792570069108,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792570069160
+  },
+  {
+    "id": "smoke_test_game_1792569479240",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792569479240,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792569479275
+  },
+  {
+    "id": "smoke_test_game_1792399337236",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792399337236,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792399337273
+  },
+  {
+    "id": "smoke_test_game_1792399145315",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792399145315,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792399145349
+  },
+  {
+    "id": "smoke_test_game_1792397780544",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792397780544,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792397780580
+  },
+  {
+    "id": "smoke_test_game_1792295477555",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792295477555,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792295477570
+  },
+  {
+    "id": "smoke_test_game_1792294973990",
+    "title": "Smoke Test Game",
+    "description": "Automated test game",
+    "category": "Chữ cái",
+    "playCount": 0,
+    "createdAt": 1792294973990,
+    "questions": [],
+    "settings": {
+      "timeLimitPerQuestion": 30,
+      "pointsPerCorrectAnswer": 10,
+      "maxTeams": 4,
+      "allowLateJoin": true,
+      "autoAdvance": false
+    },
+    "deletedAt": 1792294974021
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "summary":  "Cập nhật kế hoạch: Làm rõ mô hình vận hành và địa chỉ website — Website vẫn chạy 100% trên AI Studio (tên miền hiện tại), Supabase chỉ đóng vai trò cơ sở dữ liệu và hệ thống xác thực ngầm phía sau (Backend-as-a-Service).",
+  "updatedAt":  "2026-10-22T09:32:38.092101467Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Vui Học Cùng Cô Sang 2",
+  "description": "Ứng dụng trò chơi tương tác mầm non thời gian thực dành cho giáo viên và các đội chơi",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

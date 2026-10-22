@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Kho trò chơi mầm non
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 2. Phiên chơi thời gian thực (Sessions)
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if true; // Host controls session state
+      allow delete: if request.auth != null;
+
+      // 3. Danh sách đội tham gia (Teams)
+      match /teams/{teamId} {
+        allow read: if true;
+        // Đội chỉ được tham gia nếu có deviceId và chưa bị chiếm dụng
+        allow create: if request.resource.data.teamId == teamId &&
+                        request.resource.data.deviceId != null;
+        allow update: if request.resource.data.teamId == teamId;
+      }
+
+      // 4. Câu trả lời của từng đội (Answers)
+      // Bảo mật chống lộ bài: Chỉ xem được đáp án của đội khác khi câu hỏi đã kết thúc (results hoặc ended)
+      match /answers/{answerId} {
+        allow read: if resource.data.teamId == request.auth.uid || 
+                       get(/databases/$(database)/documents/sessions/$(sessionId)).data.questionStatus == 'results' ||
+                       get(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'ended';
+
+        // Chỉ được gửi câu trả lời 1 lần duy nhất cho mỗi câu
+        allow create: if request.resource.data.teamId != null &&
+                        request.resource.data.answerId != null &&
+                        !exists(/databases/$(database)/documents/sessions/$(sessionId)/answers/$(answerId));
+        allow update, delete: if false; // Nghiêm cấm sửa hoặc xóa đáp án đã gửi
+      }
+    }
+  }
+}

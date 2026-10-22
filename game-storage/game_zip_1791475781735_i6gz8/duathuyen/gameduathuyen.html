@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đua Thuyền Trí Tuệ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    
+    <!-- Immediate Local Fallback & In-Memory Storage Polyfill -->
+    <script>
+      (function() {
+        try {
+          var _testK = '__vh_t__';
+          window.localStorage.setItem(_testK, '1');
+          window.localStorage.removeItem(_testK);
+        } catch (_err) {
+          var _mem = {};
+          var _poly = {
+            getItem: function(k) { return _mem.hasOwnProperty(k) ? _mem[k] : null; },
+            setItem: function(k, v) { _mem[k] = String(v); },
+            removeItem: function(k) { delete _mem[k]; },
+            clear: function() { _mem = {}; }
+          };
+          try {
+            Object.defineProperty(window, 'localStorage', { value: _poly, configurable: true });
+            Object.defineProperty(window, 'sessionStorage', { value: _poly, configurable: true });
+          } catch(e) {}
+        }
+
+        var STORAGE_KEY = 'boat_race_questions_v1';
+        var defaultQuestions = [
+          { id: 'q1', text: 'Con vật nào bơi giỏi nhất trong các con dưới đây?', options: [{ text: 'Cá heo', img: 'image/1.png' }, { text: 'Gà con', img: 'image/2.png' }], correct: 0, sortOrder: 1, timestamp: 1 },
+          { id: 'q2', text: 'Thủ đô của Việt Nam là gì?', options: [{ text: 'TP. Hồ Chí Minh', img: 'image/4.png' }, { text: 'Hà Nội', img: 'image/5.png' }], correct: 1, sortOrder: 2, timestamp: 2 },
+          { id: 'q3', text: 'Phương tiện nào di chuyển trên mặt nước?', options: [{ text: 'Thuyền buồm', img: 'image/6.png' }, { text: 'Máy bay', img: 'image/qua duong.png' }], correct: 0, sortOrder: 3, timestamp: 3 }
+        ];
+
+        function getSavedQuestions() {
+          try {
+            var s = window.localStorage.getItem(STORAGE_KEY);
+            if (s) {
+              var parsed = JSON.parse(s);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+          } catch(err) {}
+          return defaultQuestions;
+        }
+
+        window.localQuestions = getSavedQuestions();
+        window.dbUtils = window.dbUtils || {
+          saveQuestion: async function(id, data) {
+            var idx = window.localQuestions.findIndex(function(q) { return q.id === id; });
+            if (idx >= 0) { window.localQuestions[idx] = Object.assign({ id: id }, data); }
+            else { window.localQuestions.push(Object.assign({ id: id }, data)); }
+            try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(window.localQuestions)); } catch(e){}
+            if (window.checkAndPreloadQuestions) window.checkAndPreloadQuestions(window.localQuestions);
+          },
+          updateQuestionOrder: async function(id, newOrder) {
+            var q = window.localQuestions.find(function(item) { return item.id === id; });
+            if (q) q.sortOrder = newOrder;
+            try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(window.localQuestions)); } catch(e){}
+          },
+          deleteQuestion: async function(id) {
+            window.localQuestions = window.localQuestions.filter(function(q) { return q.id !== id; });
+            try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(window.localQuestions)); } catch(e){}
+            if (window.checkAndPreloadQuestions) window.checkAndPreloadQuestions(window.localQuestions);
+          },
+          onQuestionsUpdate: function(callback) {
+            if (window.checkAndPreloadQuestions) window.checkAndPreloadQuestions(window.localQuestions);
+            callback(window.localQuestions);
+          }
+        };
+      })();
+    </script>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+        let app = null;
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let isFirebaseAvailable = false;
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'boat-race-default';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        try {
+            const firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : null;
+            if (firebaseConfig && firebaseConfig.apiKey) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            }
+        } catch (e) {
+            console.warn("Không thể khởi tạo Firebase, chuyển sang chế độ lưu cục bộ:", e);
+        }
+
+        const STORAGE_KEY = 'boat_race_questions_v1';
+
+        const defaultQuestions = [
+            { id: "q1", text: "Con vật nào bơi giỏi nhất trong các con dưới đây?", options: [{ text: "Cá heo", img: "" }, { text: "Gà con", img: "" }], correct: 0, sortOrder: 1, timestamp: 1 },
+            { id: "q2", text: "Thủ đô của Việt Nam là gì?", options: [{ text: "TP. Hồ Chí Minh", img: "" }, { text: "Hà Nội", img: "" }], correct: 1, sortOrder: 2, timestamp: 2 }
+        ];
+
+        function loadLocalQuestions() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+            } catch (e) {
+                console.warn("Lỗi đọc LocalStorage:", e);
+            }
+            return [...defaultQuestions];
+        }
+
+        function saveLocalQuestions(qs) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(qs));
+            } catch (e) {
+                console.warn("Lỗi ghi LocalStorage:", e);
+            }
+        }
+
+        window.localQuestions = loadLocalQuestions();
+
+        function checkAndPreloadQuestions(qs) {
+            const imageUrls = new Set();
+            if (Array.isArray(qs)) {
+                qs.forEach(q => {
+                    if (q.options) {
+                        q.options.forEach(opt => { if (opt.img && opt.img.trim()) imageUrls.add(opt.img.trim()); });
+                    }
+                });
+            }
+            preloadImages(Array.from(imageUrls));
+        }
+
+        function preloadImages(urls) {
+            const statusEl = document.getElementById('image-status-text');
+            if (!statusEl) return;
+            if (!urls || urls.length === 0) {
+                statusEl.innerText = "✅ Dữ liệu đã sẵn sàng!";
+                return;
+            }
+            let loaded = 0;
+            let total = urls.length;
+            statusEl.innerText = `⚡ Đang nạp hình ảnh: 0%`;
+            urls.forEach(url => {
+                const img = new Image();
+                img.src = url;
+                img.onload = img.onerror = () => {
+                    loaded++;
+                    if (statusEl) {
+                        const percent = Math.round((loaded / total) * 100);
+                        statusEl.innerText = percent < 100 ? `⚡ Đang nạp hình ảnh: ${percent}%` : `✅ Dữ liệu đã sẵn sàng!`;
+                    }
+                };
+            });
+        }
+
+        window.dbUtils = {
+            saveQuestion: async (id, data) => {
+                const idx = window.localQuestions.findIndex(q => q.id === id);
+                if (idx >= 0) {
+                    window.localQuestions[idx] = { id, ...data };
+                } else {
+                    window.localQuestions.push({ id, ...data });
+                }
+                saveLocalQuestions(window.localQuestions);
+                checkAndPreloadQuestions(window.localQuestions);
+
+                if (currentUser && isFirebaseAvailable && db) {
+                    try {
+                        const qDoc = doc(db, 'artifacts', appId, 'public', 'data', 'questions', id);
+                        await setDoc(qDoc, data);
+                    } catch (e) {
+                        console.warn("Đồng bộ đám mây thất bại, đang dùng dữ liệu cục bộ:", e);
+                    }
+                }
+            },
+            updateQuestionOrder: async (id, newOrder) => {
+                const q = window.localQuestions.find(item => item.id === id);
+                if (q) q.sortOrder = newOrder;
+                saveLocalQuestions(window.localQuestions);
+
+                if (currentUser && isFirebaseAvailable && db) {
+                    try {
+                        const qDoc = doc(db, 'artifacts', appId, 'public', 'data', 'questions', id);
+                        await updateDoc(qDoc, { sortOrder: newOrder });
+                    } catch (e) {
+                        console.warn("Lỗi cập nhật thứ tự đám mây:", e);
+                    }
+                }
+            },
+            deleteQuestion: async (id) => {
+                window.localQuestions = window.localQuestions.filter(q => q.id !== id);
+                saveLocalQuestions(window.localQuestions);
+                checkAndPreloadQuestions(window.localQuestions);
+
+                if (currentUser && isFirebaseAvailable && db) {
+                    try {
+                        const qDoc = doc(db, 'artifacts', appId, 'public', 'data', 'questions', id);
+                        await deleteDoc(qDoc);
+                    } catch (e) {
+                        console.warn("Lỗi xóa trên đám mây:", e);
+                    }
+                }
+            },
+            onQuestionsUpdate: (callback) => {
+                checkAndPreloadQuestions(window.localQuestions);
+                callback(window.localQuestions);
+
+                if (!auth || !db) return;
+
+                initAuth().then(() => {
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            currentUser = user;
+                            isFirebaseAvailable = true;
+                            const questionsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'questions');
+                            onSnapshot(questionsCollection, (snapshot) => {
+                                const qs = [];
+                                snapshot.forEach(doc => {
+                                    const data = doc.data();
+                                    qs.push({ id: doc.id, ...data });
+                                });
+                                if (qs.length > 0) {
+                                    qs.sort((a, b) => {
+                                        const orderA = a.sortOrder !== undefined ? a.sortOrder : (a.timestamp || 0);
+                                        const orderB = b.sortOrder !== undefined ? b.sortOrder : (b.timestamp || 0);
+                                        return orderA - orderB;
+                                    });
+                                    window.localQuestions = qs;
+                                    saveLocalQuestions(qs);
+                                    checkAndPreloadQuestions(window.localQuestions);
+                                    callback(window.localQuestions);
+                                }
+                            }, (err) => console.warn("Lỗi nghe đám mây:", err));
+                        }
+                    });
+                }).catch(e => console.warn("Chế độ ngoại tuyến:", e));
+            }
+        };
+
+        async function initAuth() {
+            if (!auth) return;
+            try {
+                if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
+                else { await signInAnonymously(auth); }
+            } catch (error) { console.error("Auth error:", error); }
+        }
+        initAuth();
+    </script>
+
+    <style>
+        body { font-family: 'Quicksand', sans-serif; background-color: #f0f7ff; overflow-x: hidden; }
+        .water { background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%); position: relative; height: 180px; border-radius: 24px; overflow: hidden; box-shadow: inset 0 4px 12px rgba(0,0,0,0.15); }
+        .wave { position: absolute; bottom: 0; left: 0; width: 200%; height: 30px; background: url('https://cdn-icons-png.flaticon.com/512/3233/3233481.png'); background-size: 40px; animation: wave-move 8s linear infinite; opacity: 0.2; }
+        @keyframes wave-move { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .boat { transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); position: absolute; z-index: 10; }
+        .frozen { filter: grayscale(1) contrast(1.2) brightness(0.8); animation: freeze-shake 0.3s infinite; }
+        @keyframes freeze-shake { 0%, 100% { transform: translate(0,0) rotate(0); } 25% { transform: translate(2px, 2px) rotate(1deg); } 75% { transform: translate(-2px, -2px) rotate(-1deg); } }
+        .answer-card { transition: all 0.2s; cursor: pointer; border-radius: 20px; overflow: hidden; border: 4px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; min-height: 120px; }
+        .answer-card:hover:not(.disabled) { transform: scale(1.03); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .answer-card.disabled { filter: grayscale(0.5); opacity: 0.7; pointer-events: none; }
+        .label-circle { position: absolute; top: 10px; left: 10px; width: 36px; height: 36px; background: rgba(255,255,255,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #374151; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 5; }
+        .team-header { border-radius: 15px 15px 0 0; padding: 8px; text-align: center; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .freeze-timer { background: rgba(30, 64, 175, 0.95); color: white; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 900; box-shadow: 0 4px 10px rgba(0,0,0,0.3); border: 2px solid white; }
+        .timer-pill { background-color: #2563eb; color: white; padding: 8px 24px; border-radius: 999px; display: flex; align-items: center; gap: 8px; font-size: 28px; font-weight: 700; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 140px; justify-content: center; transition: all 0.3s ease; }
+        .timer-warning { background-color: #dc2626 !important; animation: pulse-warning 0.5s infinite alternate; }
+        @keyframes pulse-warning { from { transform: scale(1); } to { transform: scale(1.08); } }
+        .custom-setting-input { border: 2px solid #e2e8f0; font-weight: 700; text-align: center; width: 100%; padding: 12px; border-radius: 16px; font-size: 1.1rem; color: #1e40af; outline: none; transition: border-color 0.2s; }
+        .custom-setting-input:focus { border-color: #2563eb; }
+        .preview-box { width: 60px; height: 60px; border-radius: 12px; background-color: #f1f5f9; border: 2px solid #e2e8f0; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .preview-box img { width: 100%; height: 100%; object-fit: cover; }
+        .btn-filter.active { box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); transform: scale(0.95); }
+        .btn-filter.active[data-filter="all"] { background-color: #4b5563; color: white; }
+        .btn-filter.active[data-filter="team1"] { background-color: #dc2626; color: white; }
+        .btn-filter.active[data-filter="team2"] { background-color: #2563eb; color: white; }
+        .radio-container input:checked + div { border-color: #2563eb; background-color: #eff6ff; color: #1e40af; }
+        .radio-container input:checked + div svg { display: block; }
+
+        .ocean-bg {
+            background: linear-gradient(135deg, #0284c7 0%, #1e40af 50%, #0f172a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .ocean-bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            animation: float-bubble 10s infinite linear;
+            pointer-events: none;
+        }
+        @keyframes float-bubble {
+            0% { transform: translateY(120%) scale(0.5); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-20%) scale(1.2); opacity: 0; }
+        }
+        .cloud-animated {
+            animation: cloud-drift 20s infinite linear;
+        }
+        @keyframes cloud-drift {
+            from { transform: translateX(-10%); }
+            to { transform: translateX(110%); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6 text-slate-800">
+    <div id="toast-msg" class="hidden fixed top-6 right-6 bg-slate-900/90 text-white font-bold px-6 py-4 rounded-2xl shadow-2xl z-[200] transition-all transform duration-300 flex items-center gap-3 border border-slate-700 backdrop-blur-md"></div>
+    <div id="app" class="max-w-7xl mx-auto">
+        <div id="global-music-btn" class="hidden"></div>
+
+        <!-- Modal Home -->
+        <div id="home-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div class="bg-white p-8 rounded-[32px] shadow-2xl max-w-sm w-full text-center border-4 border-blue-100">
+                <div class="text-5xl mb-4">🏠</div>
+                <h3 class="text-2xl font-black mb-2 text-slate-800">Thoát trò chơi?</h3>
+                <p class="text-gray-500 font-bold mb-8 italic">Tiến trình chơi hiện tại sẽ bị mất!</p>
+                <div class="flex flex-col gap-3">
+                    <button onclick="confirmGoHome()" class="bg-red-500 hover:bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg transition active:scale-95 uppercase">ĐỒNG Ý THOÁT</button>
+                    <button onclick="closeHomeModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-600 font-black py-4 rounded-2xl transition active:scale-95 uppercase">QUAY LẠI</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Settings -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div class="bg-white p-8 rounded-[40px] shadow-2xl max-w-md w-full border-4 border-blue-200 max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-3xl font-black text-blue-600 uppercase tracking-tight italic underline">⚙️ CÀI ĐẶT</h3>
+                    <button onclick="closeSettings()" class="text-gray-400 hover:text-gray-600 text-3xl font-bold transition">&times;</button>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-100 space-y-3">
+                        <span class="text-xs font-black text-blue-800 uppercase tracking-wider block">🚩 Tên 2 đội chơi:</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] font-black text-red-500 uppercase mb-1 block">Đội 1 (Đỏ):</label>
+                                <input type="text" id="input-team1-name" placeholder="Đội Đỏ" class="custom-setting-input text-left px-3 text-red-600">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-blue-500 uppercase mb-1 block">Đội 2 (Xanh):</label>
+                                <input type="text" id="input-team2-name" placeholder="Đội Xanh" class="custom-setting-input text-left px-3 text-blue-600">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-black text-gray-400 uppercase mb-1 block tracking-widest px-1">Thời gian chơi (Giây):</label>
+                        <input type="number" id="input-duration" min="10" max="600" class="custom-setting-input">
+                    </div>
+                    <div>
+                        <label class="text-xs font-black text-gray-400 uppercase mb-1 block tracking-widest px-1">Số điểm để về đích:</label>
+                        <input type="number" id="input-target-score" min="1" max="500" class="custom-setting-input">
+                    </div>
+                    <div>
+                        <label class="text-xs font-black text-blue-500 uppercase mb-1 block tracking-widest px-1">Điểm mỗi câu đúng:</label>
+                        <input type="number" id="input-points-per-question" min="1" max="100" class="custom-setting-input">
+                    </div>
+                    <div>
+                        <label class="text-xs font-black text-red-400 uppercase mb-1 block tracking-widest px-1">Thời gian dừng khi sai (Giây):</label>
+                        <input type="number" id="input-freeze-duration" min="1" max="10" class="custom-setting-input">
+                    </div>
+                </div>
+                <button onclick="saveAndCloseSettings()" class="w-full mt-6 bg-blue-600 text-white font-black py-4 rounded-3xl shadow-[0_6px_0_rgb(30,64,175)] hover:bg-blue-700 transition active:translate-y-1 uppercase tracking-widest">LƯU THAY ĐỔI</button>
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="ocean-bg rounded-[40px] shadow-2xl border-b-8 border-cyan-500/40 relative overflow-hidden text-center py-6 sm:py-10 px-4 sm:px-6 my-2">
+            <div class="ocean-bubble w-16 h-16 left-[10%]" style="animation-duration: 8s;"></div>
+            <div class="ocean-bubble w-10 h-10 left-[25%]" style="animation-duration: 12s; animation-delay: 2s;"></div>
+            <div class="ocean-bubble w-20 h-20 left-[60%]" style="animation-duration: 9s; animation-delay: 1s;"></div>
+            <div class="ocean-bubble w-12 h-12 left-[85%]" style="animation-duration: 11s; animation-delay: 3s;"></div>
+
+            <div class="absolute top-6 left-0 w-full opacity-25 pointer-events-none overflow-hidden">
+                <div class="cloud-animated flex gap-24 whitespace-nowrap text-white text-5xl">
+                    <span>☁️</span><span>☁️</span><span>☁️</span><span>☁️</span>
+                </div>
+            </div>
+
+            <div class="relative z-10 max-w-3xl mx-auto flex flex-col items-center">
+                <h1 class="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-8 tracking-tight uppercase drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)] whitespace-nowrap">
+                    ⛵ ĐUA THUYỀN TRÍ TUỆ
+                </h1>
+
+                <div class="flex flex-col items-center gap-5 mt-4">
+                    <button onclick="startGame()" class="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-blue-950 font-black py-6 px-16 rounded-full text-3xl shadow-[0_10px_0_rgb(180,83,9)] hover:shadow-[0_6px_0_rgb(180,83,9)] transition-all active:translate-y-2 uppercase tracking-wider border-2 border-yellow-200 cursor-pointer relative z-20">
+                        CHƠI NGAY
+                    </button>
+                    <div class="flex flex-wrap justify-center gap-3 mt-4 relative z-20">
+                        <button onclick="toggleAudio()" class="btn-toggle-audio bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3.5 px-6 rounded-2xl text-base border-2 border-white/50 flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer">🔊 Bật âm</button>
+                        <button onclick="openSettings()" class="bg-white/90 hover:bg-white text-blue-900 font-black py-3.5 px-8 rounded-2xl text-base border-2 border-white/50 flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer">⚙ CÀI ĐẶT</button>
+                        <button onclick="showAdmin()" class="bg-white/90 hover:bg-white text-blue-900 font-black py-3.5 px-8 rounded-2xl text-base border-2 border-white/50 flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer">📝 CÂU HỎI</button>
+                    </div>
+                </div>
+
+                <p id="image-status-text" class="mt-8 text-cyan-200 font-bold text-xs uppercase tracking-widest animate-pulse relative z-10">⏳ Đang nạp dữ liệu...</p>
+                <p id="current-config-summary" class="mt-2 text-cyan-100/70 font-semibold text-xs uppercase tracking-wider relative z-10">Đang chuẩn bị...</p>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="hidden">
+            <div class="flex flex-col gap-4">
+                <div class="grid grid-cols-3 items-center bg-white px-4 md:px-6 py-3 rounded-2xl shadow-sm border-2 border-blue-50">
+                    <div class="flex items-center gap-2 sm:gap-3 justify-start">
+                        <button onclick="openHomeModal()" class="bg-gray-100 hover:bg-gray-200 p-3 rounded-xl text-gray-600 transition flex items-center shadow-sm cursor-pointer"><span class="text-2xl">🏠</span></button>
+                        <button onclick="toggleAudio()" class="btn-toggle-audio bg-emerald-500 text-white font-bold px-3 py-2.5 rounded-xl text-xs flex items-center gap-1 transition shadow-sm active:scale-95 cursor-pointer">🔊 Bật âm</button>
+                    </div>
+                    
+                    <div class="flex justify-center">
+                        <div id="timer-pill-box" class="timer-pill"><span>⏳</span><span id="timer">90s</span></div>
+                    </div>
+
+                    <div class="flex gap-4 sm:gap-8 justify-end">
+                        <div class="text-center"><p class="text-[10px] font-black text-blue-500 uppercase tracking-widest" id="label-team2-score">Đội Xanh</p><p class="text-4xl font-black text-blue-700" id="score2">0</p></div>
+                        <div class="text-center"><p class="text-[10px] font-black text-red-500 uppercase tracking-widest" id="label-team1-score">Đội Đỏ</p><p class="text-4xl font-black text-red-700" id="score1">0</p></div>
+                    </div>
+                </div>
+                <div class="water relative">
+                    <div class="wave"></div>
+                    <div class="absolute right-14 top-0 bottom-0 w-2 border-r-4 border-dashed border-white/40 flex items-center justify-center z-10"><div class="bg-yellow-400 text-yellow-900 font-black px-2 py-1 rounded-md text-[10px] rotate-90 whitespace-nowrap shadow-lg uppercase">ĐÍCH <span id="track-target-score">30</span>đ</div></div>
+                    <div id="boat1" class="boat flex flex-col items-center" style="top: 22%; left: 5%;">
+                        <div id="freeze1" class="hidden absolute -bottom-8 whitespace-nowrap z-50">
+                            <div class="freeze-timer">🧊 DỪNG: <span id="freeze-time1">2</span>s</div>
+                        </div>
+                        <div class="text-2xl animate-bounce">🚩</div>
+                        <div class="text-5xl drop-shadow-md">⛵</div>
+                    </div>
+                    <div id="boat2" class="boat flex flex-col items-center" style="top: 55%; left: 5%;"> 
+                        <div id="freeze2" class="hidden absolute -top-10 whitespace-nowrap z-50">
+                            <div class="freeze-timer">🧊 DỪNG: <span id="freeze-time2">2</span>s</div>
+                        </div>
+                        <div class="text-2xl animate-bounce" style="animation-delay: 0.5s">🚩</div>
+                        <div class="text-5xl drop-shadow-md">🚤</div>
+                    </div>
+                </div>
+                <div class="bg-white p-8 rounded-[32px] shadow-xl text-center border-b-4 border-blue-400 min-h-[140px] flex items-center justify-center"><h2 id="question-text" class="text-3xl md:text-4xl font-black leading-snug italic text-slate-800">...</h2></div>
+                <div class="grid grid-cols-2 gap-6">
+                    <div><div id="header-team2" class="team-header bg-blue-500 text-white mb-3 shadow-md uppercase tracking-wider">🚤 ĐỘI XANH</div><div id="options-team2" class="grid grid-cols-2 gap-3"></div></div>
+                    <div><div id="header-team1" class="team-header bg-red-500 text-white mb-3 shadow-md uppercase tracking-wider">⛵ ĐỘI ĐỎ</div><div id="options-team1" class="grid grid-cols-2 gap-3"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Screen -->
+        <div id="admin-screen" class="hidden bg-white p-8 rounded-3xl shadow-xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-8 border-b pb-4">
+                <h2 class="text-3xl font-black text-blue-600 italic uppercase">📂 Quản lý câu hỏi</h2>
+                <button onclick="hideAdmin()" class="bg-slate-100 text-slate-600 px-8 py-3 rounded-full font-bold hover:bg-slate-200 transition cursor-pointer">QUAY LẠI</button>
+            </div>
+            <div class="grid lg:grid-cols-2 gap-10">
+                <div class="bg-blue-50 p-8 rounded-[32px] sticky top-0 h-fit">
+                    <h3 id="admin-form-title" class="font-black text-blue-800 mb-6 uppercase tracking-tighter text-xl">✨ Thêm câu hỏi mới</h3>
+                    <input id="q-input" type="text" placeholder="Nội dung câu hỏi..." class="w-full p-4 rounded-2xl mb-6 border-2 border-blue-100 outline-none focus:border-blue-500 font-bold shadow-sm">
+                    <div class="grid grid-cols-1 gap-4 mb-6">
+                        <div class="flex flex-col gap-2 p-4 bg-white rounded-2xl border border-blue-100 shadow-sm">
+                            <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-black text-slate-400 uppercase">Lựa chọn A</span><div id="preview-img-0" class="preview-box"><span class="text-[9px] text-slate-300">Trống</span></div></div>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input class="opt-input flex-1 p-3 rounded-xl border text-sm font-bold bg-slate-50 focus:bg-white" placeholder="Chữ đáp án A">
+                                <input class="img-input flex-1 p-3 rounded-xl border text-[10px] font-mono bg-slate-50 focus:bg-white" oninput="updatePreview(0, this.value)" placeholder="Link ảnh hoặc chọn file">
+                                <label class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-4 py-3 rounded-xl text-xs flex items-center justify-center cursor-pointer transition shrink-0">
+                                    📁 Chọn file
+                                    <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(0, this)">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 p-4 bg-white rounded-2xl border border-blue-100 shadow-sm">
+                            <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-black text-slate-400 uppercase">Lựa chọn B</span><div id="preview-img-1" class="preview-box"><span class="text-[9px] text-slate-300">Trống</span></div></div>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input class="opt-input flex-1 p-3 rounded-xl border text-sm font-bold bg-slate-50 focus:bg-white" placeholder="Chữ đáp án B">
+                                <input class="img-input flex-1 p-3 rounded-xl border text-[10px] font-mono bg-slate-50 focus:bg-white" oninput="updatePreview(1, this.value)" placeholder="Link ảnh hoặc chọn file">
+                                <label class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-4 py-3 rounded-xl text-xs flex items-center justify-center cursor-pointer transition shrink-0">
+                                    📁 Chọn file
+                                    <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(1, this)">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3 mb-8">
+                        <span class="text-[11px] font-black text-blue-800 uppercase px-1">Đánh dấu đáp án đúng:</span>
+                        <div class="flex gap-4">
+                            <label class="radio-container flex-1 cursor-pointer"><input type="radio" name="correct-choice" value="0" class="hidden" checked><div class="p-4 rounded-2xl border-2 border-white bg-white/60 flex items-center justify-center font-black text-slate-400 shadow-sm underline uppercase">ĐÁP ÁN A</div></label>
+                            <label class="radio-container flex-1 cursor-pointer"><input type="radio" name="correct-choice" value="1" class="hidden"><div class="p-4 rounded-2xl border-2 border-white bg-white/60 flex items-center justify-center font-black text-slate-400 shadow-sm underline uppercase">ĐÁP ÁN B</div></label>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="btn-save-question" onclick="saveQuestion()" class="flex-1 bg-blue-600 text-white font-black py-5 rounded-3xl shadow-[0_6px_0_rgb(30,64,175)] hover:bg-blue-700 transition uppercase tracking-widest text-sm cursor-pointer">LƯU CÂU HỎI</button>
+                        <button id="btn-cancel-edit" onclick="cancelEdit()" class="hidden bg-slate-200 text-slate-600 font-black px-8 rounded-3xl uppercase text-xs cursor-pointer">HỦY</button>
+                    </div>
+                </div>
+                <div id="questions-list" class="space-y-4 p-2 bg-slate-50/50 rounded-[32px] border-2 border-dashed border-slate-200 min-h-[400px]"></div>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" class="hidden bg-white p-10 rounded-[40px] shadow-2xl border-t-8 border-yellow-400 text-center">
+            <h2 id="winner-text" class="text-5xl font-black text-yellow-600 mb-8 uppercase italic">KẾT QUẢ</h2>
+            <div class="flex justify-center gap-8 mb-12">
+                <div class="bg-blue-50 p-8 rounded-[32px] min-w-[200px] border-b-4 border-blue-200"><p class="font-black text-blue-600 uppercase text-xs mb-1" id="res-label-team2">Đội Xanh</p><p class="text-6xl font-black text-slate-800" id="final-score2">0</p></div>
+                <div class="bg-red-50 p-8 rounded-[32px] min-w-[200px] border-b-4 border-red-200"><p class="font-black text-red-600 uppercase text-xs mb-1" id="res-label-team1">Đội Đỏ</p><p class="text-6xl font-black text-slate-800" id="final-score1">0</p></div>
+            </div>
+            <div class="text-left bg-slate-50 p-8 rounded-[32px] mb-10 border border-slate-100 shadow-inner">
+                <h3 class="font-black text-slate-400 mb-6 uppercase text-sm border-b border-slate-200 pb-3 text-center italic">📜 Lịch sử cuộc đua</h3>
+                <div class="flex justify-center gap-2 mb-8">
+                    <button onclick="changeHistoryFilter('all')" data-filter="all" class="btn-filter active px-6 py-2 rounded-full font-black text-[11px] bg-white border-2 text-slate-500 uppercase cursor-pointer">TẤT CẢ</button>
+                    <button onclick="changeHistoryFilter('team1')" data-filter="team1" id="filter-btn-team1" class="btn-filter px-6 py-2 rounded-full font-black text-[11px] bg-white border-2 border-red-100 text-red-400 uppercase cursor-pointer">ĐỘI ĐỎ</button>
+                    <button onclick="changeHistoryFilter('team2')" data-filter="team2" id="filter-btn-team2" class="btn-filter px-6 py-2 rounded-full font-black text-[11px] bg-white border-2 border-blue-100 text-blue-400 uppercase cursor-pointer">ĐỘI XANH</button>
+                </div>
+                <div id="history-log" class="space-y-4 max-h-[400px] overflow-y-auto pr-2"></div>
+            </div>
+            <button onclick="restartGame()" class="bg-blue-600 hover:bg-blue-700 text-white font-black py-6 px-20 rounded-full text-2xl md:text-3xl shadow-[0_8px_0_rgb(30,64,175)] uppercase italic transition active:translate-y-1 cursor-pointer">CHƠI LẠI</button>
+        </div>
+    </div>
+
+    <script>
+        const SOUNDS = {
+            correct: new Audio('https://assets.mixkit.co/active_storage/sfx/600/600-preview.mp3'),
+            win: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
+            timeout: new Audio('https://assets.mixkit.co/active_storage/sfx/1084/1084-preview.mp3'),
+            bgm: new Audio('audio/nhacnen.mp3') 
+        };
+        SOUNDS.bgm.loop = true; 
+        SOUNDS.bgm.volume = 0.15;
+        let isAudioMuted = false;
+
+        // Fallback or custom local audio handler if file is placed alongside HTML
+        // Bạn có thể thay thế link trên bằng file nhạc trong cùng thư mục (ví dụ: 'nhac_nen.mp3')
+        function setLocalBGM(filePath) {
+            if (filePath) {
+                SOUNDS.bgm.src = filePath;
+                SOUNDS.bgm.load();
+            }
+        }
+
+        function playTickSound() {
+            if (isAudioMuted) return;
+            try {
+                const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtxClass) return;
+                const ctx = new AudioCtxClass();
+                const now = ctx.currentTime;
+                
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now); // Nốt A4 nhẹ nhàng,êm tai
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.05);
+
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } catch (e) {
+                console.warn("WebAudio tick error:", e);
+            }
+        }
+
+        function stopSound(name) {
+            if (SOUNDS[name]) {
+                SOUNDS[name].pause();
+                SOUNDS[name].currentTime = 0;
+            }
+        }
+
+        function playSfx(name) { 
+            if (isAudioMuted) return;
+            if (SOUNDS[name]) { 
+                SOUNDS[name].currentTime = 0; 
+                SOUNDS[name].play().catch(() => {}); 
+            } 
+        }
+
+        window.toggleAudio = function() {
+            isAudioMuted = !isAudioMuted;
+            const inGame = !document.getElementById('game-screen').classList.contains('hidden');
+            if (isAudioMuted) {
+                SOUNDS.bgm.pause();
+            } else {
+                if (inGame) {
+                    SOUNDS.bgm.play().catch(() => {});
+                }
+            }
+            updateAudioBtnUI();
+        };
+
+        function updateAudioBtnUI() {
+            const btns = document.querySelectorAll('.btn-toggle-audio');
+            btns.forEach(btn => {
+                btn.innerHTML = isAudioMuted ? '🔇 Tắt âm' : '🔊 Bật âm';
+                if (isAudioMuted) {
+                    btn.classList.add('bg-gray-300', 'text-gray-700');
+                    btn.classList.remove('bg-emerald-500', 'text-white');
+                } else {
+                    btn.classList.remove('bg-gray-300', 'text-gray-700');
+                    btn.classList.add('bg-emerald-500', 'text-white');
+                }
+            });
+        }
+
+        let questions = [];
+        let gameState = {
+            team1Name: 'Đội Đỏ', team2Name: 'Đội Xanh',
+            selectedDuration: 90, targetScore: 30, freezeDuration: 2, pointsPerCorrect: 3,
+            time: 90, score1: 0, score2: 0, currentQuestion: null, 
+            currentQuestionIndex: 0, timerInterval: null,
+            frozen1: false, frozen2: false, history: [], editingId: null, historyFilter: 'all'
+        };
+
+        const startSync = () => {
+            if (window.dbUtils) {
+                window.dbUtils.onQuestionsUpdate((data) => {
+                    questions = data;
+                    if (!document.getElementById('admin-screen').classList.contains('hidden')) renderQuestionsList();
+                    updateConfigSummary();
+                });
+            } else { setTimeout(startSync, 100); }
+        };
+        startSync();
+
+        window.openSettings = function() { 
+            document.getElementById('input-team1-name').value = gameState.team1Name;
+            document.getElementById('input-team2-name').value = gameState.team2Name;
+            document.getElementById('input-duration').value = gameState.selectedDuration;
+            document.getElementById('input-target-score').value = gameState.targetScore;
+            document.getElementById('input-freeze-duration').value = gameState.freezeDuration;
+            document.getElementById('input-points-per-question').value = gameState.pointsPerCorrect;
+            document.getElementById('settings-modal').classList.remove('hidden'); 
+        };
+        window.closeSettings = function() { document.getElementById('settings-modal').classList.add('hidden'); };
+        window.saveAndCloseSettings = function() {
+            const t1 = document.getElementById('input-team1-name').value.trim();
+            const t2 = document.getElementById('input-team2-name').value.trim();
+            gameState.team1Name = t1 !== "" ? t1 : 'Đội Đỏ';
+            gameState.team2Name = t2 !== "" ? t2 : 'Đội Xanh';
+
+            gameState.selectedDuration = parseInt(document.getElementById('input-duration').value) || 90;
+            gameState.targetScore = parseInt(document.getElementById('input-target-score').value) || 30;
+            gameState.freezeDuration = parseInt(document.getElementById('input-freeze-duration').value) || 2;
+            gameState.pointsPerCorrect = parseInt(document.getElementById('input-points-per-question').value) || 3;
+            
+            updateTeamNamesUI();
+            updateConfigSummary(); 
+            closeSettings();
+        };
+
+        function updateTeamNamesUI() {
+            document.getElementById('header-team1').innerText = `⛵ ${gameState.team1Name.toUpperCase()}`;
+            document.getElementById('header-team2').innerText = `🚤 ${gameState.team2Name.toUpperCase()}`;
+            document.getElementById('label-team1-score').innerText = gameState.team1Name;
+            document.getElementById('label-team2-score').innerText = gameState.team2Name;
+
+            document.getElementById('res-label-team1').innerText = gameState.team1Name;
+            document.getElementById('res-label-team2').innerText = gameState.team2Name;
+            document.getElementById('filter-btn-team1').innerText = gameState.team1Name.toUpperCase();
+            document.getElementById('filter-btn-team2').innerText = gameState.team2Name.toUpperCase();
+        }
+
+        window.restartGame = function() {
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+            const timerPill = document.getElementById('timer-pill-box');
+            if (timerPill) timerPill.classList.remove('timer-warning');
+            stopSound('bgm');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+        };
+
+        function updateConfigSummary() {
+            document.getElementById('current-config-summary').innerText = `${gameState.team1Name} vs ${gameState.team2Name} • ${gameState.selectedDuration} giây • ${gameState.targetScore}đ về đích`;
+        }
+
+        window.updatePreview = function(index, url) {
+            const previewBox = document.getElementById(`preview-img-${index}`);
+            if (url && url.trim() !== "") {
+                previewBox.innerHTML = `<img src="${url}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\'text-[8px] text-red-400\'>Lỗi</span>'">`;
+            } else { previewBox.innerHTML = `<span class="text-[9px] text-slate-300 uppercase">Trống</span>`; }
+        };
+
+        window.handleImageUpload = function(index, fileInput) {
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Url = e.target.result;
+                const imgInputInputs = document.querySelectorAll('.img-input');
+                if (imgInputInputs[index]) {
+                    imgInputInputs[index].value = base64Url;
+                    updatePreview(index, base64Url);
+                }
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.openHomeModal = function() { document.getElementById('home-modal').classList.remove('hidden'); };
+        window.closeHomeModal = function() { document.getElementById('home-modal').classList.add('hidden'); };
+        window.confirmGoHome = function() { 
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval); 
+            stopSound('bgm');
+            closeHomeModal(); 
+            document.getElementById('game-screen').classList.add('hidden'); 
+            document.getElementById('start-screen').classList.remove('hidden'); 
+        };
+        window.showAdmin = function() { document.getElementById('start-screen').classList.add('hidden'); document.getElementById('admin-screen').classList.remove('hidden'); renderQuestionsList(); };
+        window.hideAdmin = function() { cancelEdit(); document.getElementById('admin-screen').classList.add('hidden'); document.getElementById('start-screen').classList.remove('hidden'); };
+
+        function renderQuestionsList() {
+            const list = document.getElementById('questions-list');
+            if (!list) return;
+            list.innerHTML = questions.length === 0 ? "<p class='text-center text-gray-400 py-10 italic text-sm'>Chưa có dữ liệu câu hỏi.</p>" : 
+                questions.map((q, idx) => `
+                <div class="bg-white border-2 border-slate-100 p-4 rounded-2xl flex justify-between items-center shadow-sm group">
+                    <div class="flex items-center gap-3">
+                        <span class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-black text-xs shrink-0">${idx + 1}</span>
+                        <div>
+                            <p class="font-black text-slate-800 text-sm">${q.text}</p>
+                            <p class="text-[11px] font-bold text-slate-400">Đáp án đúng: ${q.options && q.options[q.correct] ? q.options[q.correct].text : ''}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="moveQuestion('${q.id}', -1)" class="p-2 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-500 transition cursor-pointer" title="Lên">⬆️</button>
+                        <button onclick="moveQuestion('${q.id}', 1)" class="p-2 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-500 transition cursor-pointer" title="Xuống">⬇</button>
+                        <button onclick="editQuestion('${q.id}')" class="p-2 hover:bg-blue-50 text-blue-600 rounded-xl text-xs font-bold transition cursor-pointer">✏️</button>
+                        <button onclick="deleteQuestion('${q.id}')" class="p-2 hover:bg-red-50 text-red-600 rounded-xl text-xs font-bold transition cursor-pointer">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast-msg');
+            if (!toast) return;
+            toast.innerText = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        }
+
+        window.moveQuestion = async function(id, direction) {
+            const idx = questions.findIndex(q => q.id === id); if (idx === -1) return;
+            const targetIdx = idx + direction; if (targetIdx < 0 || targetIdx >= questions.length) return;
+            const currentQ = questions[idx]; const targetQ = questions[targetIdx];
+            const currentOrder = currentQ.sortOrder !== undefined ? currentQ.sortOrder : (currentQ.timestamp || idx);
+            const targetOrder = targetQ.sortOrder !== undefined ? targetQ.sortOrder : (targetQ.timestamp || targetIdx);
+
+            questions[idx] = targetQ;
+            questions[targetIdx] = currentQ;
+            renderQuestionsList();
+
+            try { 
+                await window.dbUtils.updateQuestionOrder(currentQ.id, targetOrder); 
+                await window.dbUtils.updateQuestionOrder(targetQ.id, currentOrder); 
+            } catch (e) { console.error("Swap failed", e); }
+        };
+
+        window.editQuestion = function(id) {
+            const q = questions.find(item => item.id === id); if (!q) return;
+            gameState.editingId = id; document.getElementById('admin-form-title').innerText = "🔄 Đang sửa câu hỏi";
+            document.getElementById('q-input').value = q.text;
+            q.options.forEach((opt, i) => { 
+                document.querySelectorAll('.opt-input')[i].value = opt.text; 
+                document.querySelectorAll('.img-input')[i].value = opt.img || "";
+                updatePreview(i, opt.img); 
+            });
+            document.querySelector(`input[name="correct-choice"][value="${q.correct}"]`).checked = true;
+            document.getElementById('btn-save-question').innerText = "CẬP NHẬT CÂU HỎI";
+            document.getElementById('btn-cancel-edit').classList.remove('hidden');
+            document.getElementById('admin-screen').scrollTop = 0;
+        };
+
+        window.cancelEdit = function() {
+            gameState.editingId = null; document.getElementById('admin-form-title').innerText = "✨ Thêm câu hỏi mới";
+            document.getElementById('q-input').value = "";
+            document.querySelectorAll('.opt-input').forEach(i => i.value = "");
+            document.querySelectorAll('.img-input').forEach((i, idx) => { i.value = ""; updatePreview(idx, ""); });
+            document.querySelector('input[name="correct-choice"][value="0"]').checked = true;
+            document.getElementById('btn-save-question').innerText = "LƯU CÂU HỎI";
+            document.getElementById('btn-cancel-edit').classList.add('hidden');
+        };
+
+        function generateUniqueId() {
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                return crypto.randomUUID();
+            }
+            return 'q_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        }
+
+        window.saveQuestion = async function() {
+            try {
+                const text = document.getElementById('q-input').value.trim(); 
+                if(!text) {
+                    showToast("⚠️ Vui lòng nhập nội dung câu hỏi!");
+                    return;
+                }
+                const options = [];
+                const optInputs = document.querySelectorAll('.opt-input');
+                const imgInputs = document.querySelectorAll('.img-input');
+
+                for(let i=0; i<2; i++) {
+                    options.push({ 
+                        text: (optInputs[i] && optInputs[i].value.trim()) ? optInputs[i].value.trim() : `Đáp án ${String.fromCharCode(65+i)}`, 
+                        img: (imgInputs[i] && imgInputs[i].value.trim()) ? imgInputs[i].value.trim() : ""
+                    });
+                }
+                const checkedRadio = document.querySelector('input[name="correct-choice"]:checked');
+                const correctValue = checkedRadio ? parseInt(checkedRadio.value) : 0;
+                const id = gameState.editingId || generateUniqueId();
+                const maxOrder = questions.length > 0 ? Math.max(...questions.map(q => (q.sortOrder !== undefined ? q.sortOrder : 0))) : 0;
+                
+                const questionData = { 
+                    text: text, 
+                    options: options, 
+                    correct: correctValue, 
+                    timestamp: Date.now(), 
+                    sortOrder: gameState.editingId ? ((questions.find(q => q.id === id) || {}).sortOrder || Date.now()) : (maxOrder + 1) 
+                };
+                
+                await window.dbUtils.saveQuestion(id, questionData); 
+                questions = [...window.localQuestions];
+                renderQuestionsList();
+                cancelEdit(); 
+                showToast("✅ Đã lưu câu hỏi thành công!");
+            } catch (e) { 
+                console.error("Lỗi khi lưu câu hỏi:", e);
+                showToast("❌ Lỗi khi lưu câu hỏi: " + (e.message || "Đã xảy ra lỗi"));
+            }
+        };
+
+        window.deleteQuestion = async function(id) { 
+            if(gameState.editingId === id) cancelEdit(); 
+            try { 
+                await window.dbUtils.deleteQuestion(id); 
+                questions = window.localQuestions;
+                renderQuestionsList();
+                showToast("🗑️ Đã xóa câu hỏi!");
+            } catch (e) { console.error(e); } 
+        };
+
+        window.startGame = function() {
+            if(questions.length === 0) {
+                alert("Vui lòng thêm câu hỏi trước khi bắt đầu chơi!");
+                return;
+            }
+            stopSound('bgm');
+            
+            const timerPill = document.getElementById('timer-pill-box');
+            if (timerPill) timerPill.classList.remove('timer-warning');
+
+            if (!isAudioMuted) {
+                SOUNDS.bgm.currentTime = 0;
+                SOUNDS.bgm.play().catch(e => {
+                    console.log("BGM autoplay prevented, attempting user interaction sync:", e);
+                });
+            }
+            
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            gameState.time = gameState.selectedDuration; 
+            document.getElementById('timer').innerText = `${gameState.time}s`;
+            document.getElementById('track-target-score').innerText = gameState.targetScore;
+            gameState.score1 = 0; gameState.score2 = 0; gameState.currentQuestionIndex = 0;
+            gameState.history = []; gameState.historyFilter = 'all';
+            document.getElementById('score1').innerText = "0"; document.getElementById('score2').innerText = "0";
+            document.getElementById('freeze1').classList.add('hidden'); document.getElementById('freeze2').classList.add('hidden');
+            updateTeamNamesUI();
+            nextQuestion(); startTimer(); updateUI();
+        };
+
+        function startTimer() {
+            if(gameState.timerInterval) clearInterval(gameState.timerInterval);
+            const timerPill = document.getElementById('timer-pill-box');
+            
+            gameState.timerInterval = setInterval(() => {
+                gameState.time--; 
+                const t = gameState.time;
+                document.getElementById('timer').innerText = `${t}s`;
+
+                if (t <= 10 && t > 0) {
+                    playTickSound();
+                    if (timerPill) timerPill.classList.add('timer-warning');
+                } else if (timerPill) {
+                    timerPill.classList.remove('timer-warning');
+                }
+
+                if(t <= 0) { 
+                    if (timerPill) timerPill.classList.remove('timer-warning');
+                    playSfx('timeout'); 
+                    endGame(); 
+                }
+            }, 1000);
+        }
+
+        function nextQuestion() {
+            const qIdx = gameState.currentQuestionIndex;
+            gameState.currentQuestion = questions[qIdx];
+            gameState.currentQuestionIndex = (gameState.currentQuestionIndex + 1) % questions.length;
+            document.getElementById('question-text').innerText = gameState.currentQuestion.text;
+            renderOptions(1, 'options-team1'); renderOptions(2, 'options-team2');
+        }
+
+        function renderOptions(teamId, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            gameState.currentQuestion.options.forEach((opt, idx) => {
+                const card = document.createElement('div');
+                card.id = `card-team${teamId}-${idx}`;
+                card.className = `answer-card bg-white relative flex flex-col items-center shadow-md`;
+                
+                if (opt.img && opt.img.trim() !== "") {
+                    card.innerHTML = `
+                        <div class="label-circle">${String.fromCharCode(65 + idx)}</div>
+                        <img src="${opt.img}" fetchpriority="high" loading="eager" class="w-full h-32 md:h-48 object-cover" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1076/1076337.png'">
+                        <div class="p-3 w-full text-center bg-white border-t flex-1 flex items-center justify-center">
+                            <span class="font-black text-slate-700 text-xs md:text-sm line-clamp-2 uppercase">${opt.text}</span>
+                        </div>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <div class="label-circle">${String.fromCharCode(65 + idx)}</div>
+                        <div class="p-6 w-full text-center bg-white flex-1 flex items-center justify-center">
+                            <span class="font-black text-slate-800 text-lg md:text-xl uppercase leading-tight">${opt.text}</span>
+                        </div>
+                    `;
+                }
+                
+                card.onclick = () => handleAnswer(teamId, idx);
+                container.appendChild(card);
+            });
+        }
+
+        function handleAnswer(team, selectedIdx) {
+            if(gameState[`frozen${team}`]) return;
+            const isCorrect = selectedIdx === gameState.currentQuestion.correct;
+            const currentQ = gameState.currentQuestion;
+            const teamName = team === 1 ? gameState.team1Name : gameState.team2Name;
+            const teamCode = team === 1 ? "team1" : "team2";
+            gameState.history.push({ 
+                question: currentQ.text, teamName: teamName, teamCode: teamCode,
+                choiceText: currentQ.options[selectedIdx].text,
+                choiceImg: currentQ.options[selectedIdx].img, 
+                correctText: currentQ.options[currentQ.correct].text,
+                correctChoiceImg: currentQ.options[currentQ.correct].img, 
+                isCorrect: isCorrect 
+            });
+            if(isCorrect) {
+                playSfx('correct'); gameState[`score${team}`] += gameState.pointsPerCorrect; updateUI();
+                if(document.getElementById(`card-team${team}-${selectedIdx}`)) document.getElementById(`card-team${team}-${selectedIdx}`).classList.add('ring-4', 'ring-green-400', 'z-20');
+                setTimeout(() => { nextQuestion(); }, 400);
+                if(gameState[`score${team}`] >= gameState.targetScore) endGame();
+            } else { freezeTeam(team, selectedIdx); }
+        }
+
+        function freezeTeam(team, idx) {
+            gameState[`frozen${team}`] = true;
+            const boat = document.getElementById(`boat${team}`);
+            const freezeContainer = document.getElementById(`freeze${team}`);
+            const card = document.getElementById(`card-team${team}-${idx}`);
+            if(boat) boat.classList.add('frozen'); if(freezeContainer) freezeContainer.classList.remove('hidden'); if(card) card.classList.add('disabled', 'ring-4', 'ring-red-400');
+            let timeLeft = gameState.freezeDuration;
+            if(document.getElementById('freeze-time' + team)) document.getElementById('freeze-time' + team).innerText = timeLeft;
+            const countdown = setInterval(() => {
+                timeLeft--; if(document.getElementById('freeze-time' + team)) document.getElementById('freeze-time' + team).innerText = Math.max(0, timeLeft);
+                if(timeLeft <= 0) { clearInterval(countdown); gameState[`frozen${team}`] = false; if(boat) boat.classList.remove('frozen'); if(freezeContainer) freezeContainer.classList.add('hidden'); if(card) card.classList.remove('ring-4', 'ring-red-400', 'disabled'); }
+            }, 1000);
+        }
+
+        function updateUI() {
+            document.getElementById('score1').innerText = gameState.score1; document.getElementById('score2').innerText = gameState.score2;
+            const pos1 = 5 + (gameState.score1 / gameState.targetScore) * 80;
+            const pos2 = 5 + (gameState.score2 / gameState.targetScore) * 80;
+            document.getElementById('boat1').style.left = `${Math.min(pos1, 90)}%`; document.getElementById('boat2').style.left = `${Math.min(pos2, 90)}%`;
+        }
+
+        function endGame() {
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+            const timerPill = document.getElementById('timer-pill-box');
+            if (timerPill) timerPill.classList.remove('timer-warning');
+            stopSound('bgm');
+            
+            if (gameState.score1 >= gameState.targetScore || gameState.score2 >= gameState.targetScore) playSfx('win');
+            document.getElementById('game-screen').classList.add('hidden'); 
+            document.getElementById('result-screen').classList.remove('hidden');
+            const s1 = gameState.score1; const s2 = gameState.score2;
+            let winner = "KẾT QUẢ HÒA! 🤝"; 
+            if(s1 > s2) winner = `🏆 ${gameState.team1Name.toUpperCase()} CHIẾN THẮNG!`; 
+            else if(s2 > s1) winner = `🏆 ${gameState.team2Name.toUpperCase()} CHIẾN THẮNG!`;
+            
+            document.getElementById('winner-text').innerText = winner; document.getElementById('final-score1').innerText = s1; document.getElementById('final-score2').innerText = s2;
+            renderHistory();
+        }
+
+        window.changeHistoryFilter = function(filter) {
+            gameState.historyFilter = filter; document.querySelectorAll('.btn-filter').forEach(btn => { btn.classList.remove('active'); if (btn.getAttribute('data-filter') === filter) btn.classList.add('active'); });
+            renderHistory();
+        };
+
+        function renderHistory() {
+            const historyDiv = document.getElementById('history-log');
+            if(gameState.history.length === 0) { historyDiv.innerHTML = "<p class='text-center text-gray-400 py-4 italic text-sm'>Trống.</p>"; return; }
+            const filtered = gameState.historyFilter === 'all' ? [...gameState.history] : gameState.history.filter(h => h.teamCode === gameState.historyFilter);
+            historyDiv.innerHTML = filtered.reverse().map(h => {
+                const choiceContent = h.choiceImg ? `<img src="${h.choiceImg}" class="h-20 w-24 object-cover rounded-xl border-2 border-white shadow-sm">` : `<span class="text-xs font-bold px-2">${h.choiceText}</span>`;
+                const correctContent = h.correctChoiceImg ? `<img src="${h.correctChoiceImg}" class="h-20 w-24 object-cover rounded-xl border-2 border-green-200 shadow-sm">` : `<span class="text-xs font-bold px-2 text-green-700">${h.correctText}</span>`;
+                
+                return `<div class="bg-white p-5 rounded-[32px] border-l-[12px] shadow-sm flex flex-col gap-4 ${h.isCorrect ? 'border-green-500 bg-green-50/20' : 'border-red-500 bg-red-50/20'}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <span class="font-black text-slate-400 block mb-2 uppercase text-[10px] tracking-widest italic">Câu: ${h.question}</span>
+                            <div class="flex items-center gap-3">
+                                <span class="${h.teamCode === 'team1' ? 'text-red-600' : 'text-blue-600'} font-black text-sm uppercase underline shrink-0">${h.teamName} đã chọn:</span>
+                                <div class="bg-white p-1 rounded-2xl shadow-sm border flex items-center justify-center min-h-[60px] min-w-[100px] text-center">${choiceContent}</div>
+                            </div>
+                        </div>
+                        <div class="text-4xl translate-y-2">${h.isCorrect ? '✅' : '❌'}</div>
+                    </div>
+                    ${!h.isCorrect ? `<div class="flex items-center gap-3 mt-2 pt-4 border-t border-slate-200/50"><span class="text-[11px] font-black text-green-600 uppercase tracking-widest shrink-0">ĐÁP ÁN ĐÚNG:</span><div class="bg-white p-1 rounded-2xl shadow-sm border-2 border-green-200 flex items-center justify-center min-h-[60px] min-w-[100px] text-center">${correctContent}</div></div>` : ''}
+                </div>`;
+            }).join('');
+        }
+        
+        setTimeout(() => { updateTeamNamesUI(); updateConfigSummary(); updateAudioBtnUI(); }, 500);
+    </script>
+
+<script id="__vui_hoc_bridge__" data-version="2.0">
+(function() {
+  function extractGameStats() {
+    var history = [];
+    var score = 0;
+    var totalQuestions = 0;
+    var totalCorrect = 0;
+    var isCorrect = false;
+
+    try {
+      if (typeof gameState !== 'undefined' && gameState) {
+        if (Array.isArray(gameState.history)) {
+          history = gameState.history.map(function(h) {
+            return {
+              question: h.question || 'Câu hỏi',
+              choiceText: h.choiceText || '',
+              choiceImg: h.choiceImg || '',
+              correctText: h.correctText || '',
+              correctChoiceImg: h.correctChoiceImg || '',
+              isCorrect: Boolean(h.isCorrect),
+              teamName: h.teamName || '',
+              teamCode: h.teamCode || ''
+            };
+          });
+          totalQuestions = history.length;
+          totalCorrect = history.filter(function(h) { return h.isCorrect; }).length;
+        }
+
+        var s1 = typeof gameState.score1 === 'number' ? gameState.score1 : 0;
+        var s2 = typeof gameState.score2 === 'number' ? gameState.score2 : 0;
+        var highestScore = Math.max(s1, s2);
+        if (highestScore > 0) {
+          score = highestScore;
+        } else if (totalQuestions > 0) {
+          score = Math.round((totalCorrect / Math.max(totalQuestions, 1)) * 30);
+        } else {
+          score = 0;
+        }
+        isCorrect = totalCorrect > 0 && (totalCorrect >= Math.ceil(totalQuestions / 2));
+      }
+    } catch (e) {}
+
+    return {
+      history: history,
+      totalQuestions: totalQuestions,
+      totalCorrect: totalCorrect,
+      score: score,
+      isCorrect: isCorrect
+    };
+  }
+
+  window.finishVuiHocGame = function(isCorrect, points, summary, extraDetails) {
+    if (window.parent && window.parent !== window) {
+      var stats = extractGameStats();
+      var finalScore = (typeof points === 'number' && !isNaN(points)) ? points : stats.score;
+      var finalCorrect = (typeof isCorrect === 'boolean') ? isCorrect : stats.isCorrect;
+      var totalQ = (extraDetails && extraDetails.totalQuestions !== undefined) ? extraDetails.totalQuestions : stats.totalQuestions;
+      var totalC = (extraDetails && extraDetails.totalCorrect !== undefined) ? extraDetails.totalCorrect : stats.totalCorrect;
+      var finalHistory = (extraDetails && extraDetails.history) ? extraDetails.history : stats.history;
+
+      window.parent.postMessage({
+        type: 'GAME_COMPLETE',
+        isCorrect: finalCorrect,
+        score: finalScore,
+        totalCorrect: totalC,
+        totalQuestions: totalQ,
+        summary: summary || (totalQ > 0 ? ('Đúng ' + totalC + '/' + totalQ + ' câu (' + finalScore + 'đ)') : 'Hoàn thành trò chơi'),
+        history: finalHistory,
+        answersList: finalHistory.map(function(h) {
+          return {
+            question: h.question,
+            chosenAnswer: h.choiceText,
+            chosenImage: h.choiceImg,
+            correctAnswer: h.correctText,
+            correctImage: h.correctChoiceImg,
+            isCorrect: h.isCorrect,
+            teamName: h.teamName
+          };
+        }),
+        extra: extraDetails || {}
+      }, '*');
+    }
+  };
+
+  window.reportGameProgress = function() {
+    if (window.parent && window.parent !== window) {
+      var stats = extractGameStats();
+      window.parent.postMessage({
+        type: 'GAME_PROGRESS',
+        score: stats.score,
+        totalCorrect: stats.totalCorrect,
+        totalQuestions: stats.totalQuestions,
+        history: stats.history,
+        answersList: stats.history.map(function(h) {
+          return {
+            question: h.question,
+            chosenAnswer: h.choiceText,
+            chosenImage: h.choiceImg,
+            correctAnswer: h.correctText,
+            correctImage: h.correctChoiceImg,
+            isCorrect: h.isCorrect,
+            teamName: h.teamName
+          };
+        })
+      }, '*');
+    }
+  };
+
+  window.getVuiHocGameResult = function() {
+    var stats = extractGameStats();
+    return {
+      isCorrect: stats.isCorrect,
+      score: stats.score,
+      totalCorrect: stats.totalCorrect,
+      totalQuestions: stats.totalQuestions,
+      history: stats.history,
+      answersList: stats.history.map(function(h) {
+        return {
+          question: h.question,
+          chosenAnswer: h.choiceText,
+          chosenImage: h.choiceImg,
+          correctAnswer: h.correctText,
+          correctImage: h.correctChoiceImg,
+          isCorrect: h.isCorrect,
+          teamName: h.teamName
+        };
+      })
+    };
+  };
+
+  function autoHook() {
+    if (typeof window.endGame === 'function' && !window.endGame.__vh_hooked) {
+      var origEnd = window.endGame;
+      window.endGame = function() {
+        var r = origEnd.apply(this, arguments);
+        try {
+          var stats = extractGameStats();
+          window.finishVuiHocGame(stats.isCorrect, stats.score, 'Bé đã hoàn thành trò chơi đua thuyền!', {
+            totalCorrect: stats.totalCorrect,
+            totalQuestions: stats.totalQuestions,
+            history: stats.history
+          });
+        } catch (err) {}
+        return r;
+      };
+      window.endGame.__vh_hooked = true;
+    }
+
+    if (typeof window.handleAnswer === 'function' && !window.handleAnswer.__vh_hooked) {
+      var origAns = window.handleAnswer;
+      window.handleAnswer = function() {
+        var r = origAns.apply(this, arguments);
+        try {
+          window.reportGameProgress();
+        } catch (err) {}
+        return r;
+      };
+      window.handleAnswer.__vh_hooked = true;
+    }
+  }
+
+  autoHook();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoHook);
+  }
+  window.addEventListener('load', autoHook);
+})();
+</script>
+</body>
+</html>

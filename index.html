@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix Vui Học Cùng Cô</title>
+    <meta name="description" content="Ứng dụng trò chơi tương tác mầm non thời gian thực dành cho giáo viên và các đội chơi" />
+    <meta property="og:title" content="Remix Vui Học Cùng Cô" />
+    <meta property="og:description" content="Ứng dụng trò chơi tương tác mầm non thời gian thực dành cho giáo viên và các đội chơi" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Playpen+Sans:wght@400;500;600;700;800&family=Mali:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Itim&family=Patrick+Hand&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        try {
+          var _origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : undefined;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return _origFetch;
+            },
+            set: function(fn) {
+              _origFetch = fn;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {}
+
+        // Global safety handler for third-party extensions trying to set getters on window
+        window.addEventListener('error', function(event) {
+          if (event && event.message && event.message.indexOf('Cannot set property fetch') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
